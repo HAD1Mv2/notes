@@ -16,6 +16,14 @@
     ``` bash
     conda install -c conda-forge mlx-lm
     ```   
+
+    Optional:
+    Install `mlx-vlm` if you want to use multimodal model
+
+    ```bash
+    pip install -U mlx-vlm
+    ```
+
 3. modify opencode config
 
     Open `~/.config/opencode/opencode.json` and for example, pass the following (if you already have a config just add the MLX provider):
