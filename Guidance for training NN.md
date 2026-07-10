@@ -18,6 +18,10 @@
     - [The Cleanest Design Pattern](#the-cleanest-design-pattern)
     - [What happens in your training loop?](#what-happens-in-your-training-loop)
 - [The Role of Class Imbalance Weights in Training Calculation](#the-role-of-class-imbalance-weights-in-training-calculation)
+- [Automatic Mixed Precision (AMP)](#automatic-mixed-precision-amp)
+  - [fp16 and bf16](#fp16-and-bf16)
+    - [Cross-Reference by GPU Generation](#cross-reference-by-gpu-generation)
+    - [Why this matters for your slowdown](#why-this-matters-for-your-slowdown)
 
 
 # Data Imbalance
@@ -488,4 +492,27 @@ To visualize it, suppose your batch contains **an easy majority class sample** a
    4. **The Result**: When `loss.backward()` runs, the gradients driven by the minority sample are **9 times stronger** than the majority sample. This forces the neural network to drastically alter its internal parameters to correct its mistake on the rare class.
 
 ------------------------------
+
+# Automatic Mixed Precision (AMP)
+
+## fp16 and bf16
+
+Training using fp16 or bf16 precision could give boost on your training process, like increase in training speed and lower memory requirement, but this benefit of only occurs on NVIDIA GPU with Ampere architecture or above (Volta architecture still able to get the benefit of fp16). For older gen GPU the effect is contraproductive (ex. training becomes slower). bf16 is more prefereble than fp16.
+
+### Cross-Reference by GPU Generation
+NVIDIA introduces precision capabilities based on the architectural generation (Compute Capability) of the GPU: 
+
+| GPU Architecture | Compute Capability | Native FP16 Support? | Native BF16 Support? | Common Examples |
+|---|---|---|---|---|
+| Pascal | 6.0 - 6.1 | No (Emulated/Slow) | No | GTX 1080, Tesla P100 |
+| Volta / Turing | 7.0 - 7.5 | Yes (Tensor Cores) | No (Emulated/Slow) | RTX 20-Series, GTX 1660, Tesla T4 |
+| Ampere | 8.0 - 8.6 | Yes | Yes | RTX 30-Series, A100, RTX A4000 |
+| Ada Lovelace | 8.9 | Yes | Yes | RTX 40-Series, L4, RTX 6000 Ada |
+| Hopper / Blackwell | 9.0+ | Yes | Yes | H100, B200 |
+
+### Why this matters for your slowdown
+
+* If your GPU is Turing or older (e.g., GTX 1080, GTX 1660, RTX 2060): It completely lacks BF16 hardware. Trying to run BF16 will force software emulation, slowing it down heavily.
+* If you have a GTX 10-series card: Even FP16 is emulated and will run at a fraction of the speed of FP32. 
+
 

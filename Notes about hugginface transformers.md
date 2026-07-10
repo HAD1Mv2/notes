@@ -1,9 +1,17 @@
-- [How to use DataCollator](#how-to-use-datacollator)
-  - [Never use with padding](#never-use-with-padding)
-    - [1. Why the Error Happens](#1-why-the-error-happens)
-    - [2. How to Fix It](#2-how-to-fix-it)
-    - [3. Alternative: Manually Pop the Data](#3-alternative-manually-pop-the-data)
+- [Data Collator](#data-collator)
+  - [How to use DataCollator](#how-to-use-datacollator)
+    - [Never use with padding](#never-use-with-padding)
+      - [1. Why the Error Happens](#1-why-the-error-happens)
+      - [2. How to Fix It](#2-how-to-fix-it)
+      - [3. Alternative: Manually Pop the Data](#3-alternative-manually-pop-the-data)
+  - [All kinds of data collator class](#all-kinds-of-data-collator-class)
+    - [Core \& Generic Data Collators](#core--generic-data-collators)
+    - [Text \& Language Modeling Data Collators](#text--language-modeling-data-collators)
+    - [Task-Specific NLP Data Collators](#task-specific-nlp-data-collators)
+    - [Quick Code Example: How to Use One](#quick-code-example-how-to-use-one)
 
+
+# Data Collator
 
 ## How to use DataCollator
 
@@ -46,4 +54,51 @@ def collate_fn(batch):
     collated_batch["offset_mapping"] = offsets
     
     return collated_batch
+```
+
+## All kinds of data collator class
+
+The Hugging Face transformers library provides a wide range of specialized DataCollator classes designed to format, pad, and prepare dataset samples into batches for specific machine learning tasks.
+Here is the complete categorized list of available data collators in the library.
+
+------------------------------
+### Core & Generic Data Collators
+These are foundational collators used for basic batch formatting and structural manipulation.
+
+* **`default_data_collator`**: A basic function (not a class) that packs dictionary-like objects into tensors without adding padding.
+* **`DefaultDataCollator`**: The official class equivalent of the default function.
+* **`DataCollatorMixin`**: The base mixin class used to build custom data collators with framework routing (PyTorch/NumPy/TensorFlow).
+* **`DataCollatorWithPadding`**: Dynamically pads text inputs to the longest sequence in the batch using a specified tokenizer.
+* **`DataCollatorWithFlattening`**: Materializes nested structures by flattening inputs before performing batch collation.
+
+### Text & Language Modeling Data Collators
+These handle the masking, permuting, and shifting required to train various types of NLP language models. 
+
+* **`DataCollatorForLanguageModeling`**: Handles Masked Language Modeling (MLM like BERT) with random token masking, or Causal Language Modeling (CLM like GPT).
+* **`DataCollatorForWholeWordMask`**: Special MLM collator that masks entire words instead of subtoken pieces (improves BERT-style training).
+* **`DataCollatorForPermutationLanguageModeling`**: Specifically built for Permutation Language Modeling used to train XLNet models.
+* **`DataCollatorForSeq2Seq`**: Dynamically pads both the inputs and the target labels specifically for sequence-to-sequence tasks (e.g., translation, summarization). 
+
+### Task-Specific NLP Data Collators
+These are optimized for standard supervised downstream tasks. [1] 
+
+* **`DataCollatorForTokenClassification`**: Dynamically pads inputs and corresponding token-level labels (e.g., NER, POS tagging), masking pad label IDs with -100.
+* **`DataCollatorForMultipleChoice`**: Formats inputs for multiple-choice models where each sample contains several text choice variations. 
+
+------------------------------
+### Quick Code Example: How to Use One
+Data collators are most frequently passed directly into the Hugging Face [Trainer](https://huggingface.co/docs/transformers/main_classes/trainer): 
+
+```python
+from transformers import AutoTokenizer, DataCollatorWithPadding, Trainer
+
+tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+# Sequences will dynamically pad to the longest sequence per batch
+data_collator = DataCollatorWithPadding(tokenizer=tokenizer, return_tensors="pt")
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    train_dataset=tokenized_dataset,
+    data_collator=data_collator,  # Passed here
+)
 ```
