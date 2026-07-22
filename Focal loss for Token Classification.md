@@ -20,7 +20,8 @@ Here is a complete, production-ready implementation of Multi-Class Focal Loss fo
 This implementation includes ignore_index masking (crucial for ignoring padding tokens and `[CLS]/[SEP]` tokens, which Hugging Face marks as `-100`).
 
 ```python
-import torchimport torch.nn as nn
+import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
 class TokenFocalLoss(nn.Module):
