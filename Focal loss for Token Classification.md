@@ -97,19 +97,21 @@ To inject this into a standard Hugging Face workflow, override the compute_loss 
 ```python
 from transformers import Trainer
 class FocalLossTrainer(Trainer):
+    def __init__(self, alpha_weights, **kwargs):
+        super().__init__(**kwargs)
+        # Initialize your Focal Loss
+        # Example: 5 classes, giving more weight to rare entities
+        # alpha_weights = torch.tensor([0.1, 1.0, 1.0, 1.5, 1.5]) 
+        self.loss_fct = TokenFocalLoss(alpha=alpha_weights, gamma=2.0, ignore_index=-100)
+
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         # Forward pass
         outputs = model(**inputs)
         logits = outputs.get("logits")
         labels = inputs.get("labels")
         
-        # Initialize your Focal Loss
-        # Example: 5 classes, giving more weight to rare entities
-        alpha_weights = torch.tensor([0.1, 1.0, 1.0, 1.5, 1.5]) 
-        loss_fct = TokenFocalLoss(alpha=alpha_weights, gamma=2.0, ignore_index=-100)
-        
         # Calculate custom loss
-        loss = loss_fct(logits, labels)
+        loss = self.loss_fct(logits, labels)
         
         return (loss, outputs) if return_outputs else loss
 ```
