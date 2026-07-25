@@ -22,6 +22,17 @@
   - [fp16 and bf16](#fp16-and-bf16)
     - [Cross-Reference by GPU Generation](#cross-reference-by-gpu-generation)
     - [Why this matters for your slowdown](#why-this-matters-for-your-slowdown)
+- [Gradient Accumulation](#gradient-accumulation)
+  - [Standard Pytorch Methods](#standard-pytorch-methods)
+    - [1. Gradient Accumulation (To Simulate Large Batch Sizes)](#1-gradient-accumulation-to-simulate-large-batch-sizes)
+      - [⚠️ Critical Best Practices](#️-critical-best-practices)
+    - [2. Metric Accumulation (To Track Total Epoch Loss)](#2-metric-accumulation-to-track-total-epoch-loss)
+      - [⚠️ Critical Best Practices](#️-critical-best-practices-1)
+  - [Using Accelerate for Gradient Accumulation](#using-accelerate-for-gradient-accumulation)
+- [Scheduler](#scheduler)
+    - [Implementation Template](#implementation-template)
+    - [Common Built-In Schedulers](#common-built-in-schedulers)
+    - [Critical Rules to Keep in Mind](#critical-rules-to-keep-in-mind)
 
 
 # Data Imbalance
@@ -515,4 +526,160 @@ NVIDIA introduces precision capabilities based on the architectural generation (
 * If your GPU is Turing or older (e.g., GTX 1080, GTX 1660, RTX 2060): It completely lacks BF16 hardware. Trying to run BF16 will force software emulation, slowing it down heavily.
 * If you have a GTX 10-series card: Even FP16 is emulated and will run at a fraction of the speed of FP32. 
 
+# Gradient Accumulation 
 
+## Standard Pytorch Methods
+
+In PyTorch, batch loss accumulation generally refers to either gradient accumulation (simulating a larger batch size by accumulating gradients over multiple small batches) or tracking running metrics (accumulating losses to compute the total average loss at the end of an epoch). 
+
+Here is how to implement both techniques properly without draining your GPU memory.
+
+------------------------------
+### 1. Gradient Accumulation (To Simulate Large Batch Sizes)
+If your GPU cannot handle a large batch size, you can compute losses on smaller mini-batches, accumulate the gradients over multiple steps, and update the model parameters only after a set number of steps.
+
+```python
+import torch
+# Configuration
+accumulation_steps = 4  # Simulates a batch size 4x larger
+optimizer.zero_grad()    # Initialize outside the loop
+
+for i, (inputs, targets) in enumerate(dataloader):
+    # Forward pass
+    outputs = model(inputs)
+    loss = criterion(outputs, targets)
+    
+    # Scale the loss to match the true average of a large batch
+    loss = loss / accumulation_steps
+    loss.backward()  # Accumulates gradients internally
+    
+    # Perform optimization step after N batches
+    if (i + 1) % accumulation_steps == 0 or (i + 1) == len(dataloader):
+        optimizer.step()
+        optimizer.zero_grad()  # Reset accumulated gradients
+```
+
+#### ⚠️ Critical Best Practices
+
+* **Scale the Loss**: You must divide the `loss` by `accumulation_steps` before running `.backward()`. Because standard PyTorch loss functions return an average over the mini-batch, dividing by the number of steps keeps the global gradient magnitude correct.
+* **Handle the Last Batch**: If your total dataset size isn't perfectly divisible by your `accumulation_steps`, the final residual batch must still trigger `optimizer.step()` and `optimizer.zero_grad()` to ensure no gradients are wasted.
+
+------------------------------
+### 2. Metric Accumulation (To Track Total Epoch Loss)
+If your goal is simply to track and plot the average training loss over an entire epoch, you must aggregate the losses safely.
+
+```python
+running_loss = 0.0
+
+for inputs, targets in dataloader:
+    outputs = model(inputs)
+    loss = criterion(outputs, targets)
+    
+    # Use .item() and scale by the actual batch size
+    running_loss += loss.item() * inputs.size(0)
+    
+    # Standard backpropagation
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+
+# Compute the true average loss per sample across the entire dataset
+epoch_loss = running_loss / len(dataloader.dataset)
+```
+#### ⚠️ Critical Best Practices
+
+* **Always Use** `.item()`: Never append the raw `loss` tensor to a variable or list (e.g., `running_loss += loss`). The raw tensor retains the entire PyTorch dynamic computation graph. This causes a massive hidden memory leak that will quickly crash your GPU with an Out-Of-Memory (OOM) error.
+* **Account for Variable Batch Sizes**: The last batch of a dataset is often smaller than the others. To avoid a skewed mathematical average, multiply `loss.item()` by the current batch size (`inputs.size(0)`) during accumulation, and divide the final sum by the absolute total number of items in the dataset (`len(dataloader.dataset)`).
+
+If you're dealing with a specific error or model architecture, tell me if you are using **Variable Sequence Lengths** (like text transformers) or **BatchNorm layers**, as they require special modifications during accumulation. 
+
+## Using Accelerate for Gradient Accumulation
+
+reference: https://huggingface.co/docs/accelerate/en/usage_guides/gradient_accumulation#the-finished-code
+
+Consider simple pytorch gradient accumulation code below.
+
+```python
+device = "cuda"
+model.to(device)
+
+gradient_accumulation_steps = 2
+
+for index, batch in enumerate(training_dataloader):
+    inputs, targets = batch
+    inputs = inputs.to(device)
+    targets = targets.to(device)
+    outputs = model(inputs)
+    loss = loss_function(outputs, targets)
+    loss = loss / gradient_accumulation_steps
+    loss.backward()
+    if (index + 1) % gradient_accumulation_steps == 0:
+        optimizer.step()
+        scheduler.step()
+        optimizer.zero_grad()
+```
+Code above works fine but you may experience considerable slowdowns!
+
+Now, lets using accelerate to handle gradient accumulation, the code above can be rewitten as below
+
+```python
+from accelerate import Accelerator
+accelerator = Accelerator(gradient_accumulation_steps=2)
+model, optimizer, training_dataloader, scheduler = accelerator.prepare(
+    model, optimizer, training_dataloader, scheduler
+)
+for batch in training_dataloader:
+    with accelerator.accumulate(model):
+        inputs, targets = batch
+        outputs = model(inputs)
+        loss = loss_function(outputs, targets)
+        accelerator.backward(loss)
+        optimizer.step()
+        scheduler.step()
+        optimizer.zero_grad()
+```
+as we can see, even the device we used already handled automatically.
+
+# Scheduler
+
+A PyTorch learning rate (LR) scheduler adjusts the learning rate dynamically during training to improve model convergence and boost accuracy. Schedulers are managed via the torch.optim.lr_scheduler module and must be executed after the optimizer updates the weights.
+
+### Implementation Template
+
+```python
+import torch
+import torch.optim as optim
+import torch.optim.lr_scheduler as lr_scheduler
+
+#### 1. Define model, loss, and optimizer
+model = torch.nn.Linear(10, 2)
+optimizer = optim.SGD(model.parameters(), lr=0.1)
+
+#### 2. Initialize the scheduler (e.g., StepLR)
+scheduler = lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
+
+#### 3. Training loop
+for epoch in range(30):
+    for inputs, targets in dataloader:
+        optimizer.zero_grad()
+        outputs = model(inputs)
+        loss = criterion(outputs, targets)
+        loss.backward()
+        optimizer.step()  # Always update weights first
+        
+    scheduler.step()  # Update LR at the end of the epoch
+```
+
+### Common Built-In Schedulers
+
+* **StepLR**: Drops the learning rate by a multiplicative factor (`gamma`) every fixed number of epochs (`step_size`).
+* **ExponentialLR**: Multiplies the learning rate by a fixed decay factor at the end of every single epoch. [1, 5] 
+* **ReduceLROnPlateau**: Monitors a validation metric (like loss) and lowers the learning rate when training stalls. *Note: This requires passing the validation loss to* `scheduler.step(val_loss)`.
+* **CosineAnnealingLR**: Lowers the learning rate continuously following a cosine curve toward a target minimum value.
+* **OneCycleLR**: Starts with a low rate, ramps up to a maximum during warm-up, and then decays to a highly suppressed final rate. Ideal for fast training. 
+
+### Critical Rules to Keep in Mind
+
+* **Execution Order**: Always invoke `scheduler.step()` after `optimizer.step()`. Reversing this sequence will result in a runtime warning and distort the planned scheduling.
+* **Step vs. Epoch**: While most standard schedulers are updated once per epoch, high-frequency schedulers like `OneCycleLR` or `CyclicLR` require calling `scheduler.step()` after every mini-batch.
+* **Chaining Schedulers**: You can combine multiple schedules back-to-back using [ChainedScheduler](https://docs.pytorch.org/docs/stable/generated/torch.optim.lr_scheduler.ChainedScheduler.html) or run them chronologically via [SequentialLR](https://docs.pytorch.org/docs/stable/generated/torch.optim.lr_scheduler.SequentialLR.html). 
