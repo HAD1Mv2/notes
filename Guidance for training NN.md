@@ -29,6 +29,9 @@
     - [2. Metric Accumulation (To Track Total Epoch Loss)](#2-metric-accumulation-to-track-total-epoch-loss)
       - [⚠️ Critical Best Practices](#️-critical-best-practices-1)
   - [Using Accelerate for Gradient Accumulation](#using-accelerate-for-gradient-accumulation)
+    - [Eval in gradient accumulation setting](#eval-in-gradient-accumulation-setting)
+      - [Step-by-step Evaluation Implementation](#step-by-step-evaluation-implementation)
+      - [Key Takeaways for Evaluation](#key-takeaways-for-evaluation)
 - [Scheduler](#scheduler)
     - [Implementation Template](#implementation-template)
     - [Common Built-In Schedulers](#common-built-in-schedulers)
@@ -640,6 +643,74 @@ for batch in training_dataloader:
 ```
 as we can see, even the device we used already handled automatically.
 
+### Eval in gradient accumulation setting
+
+When running the **evaluation phase** (inference) under variable-length sequences, you do not need to do manual loss-scaling hacks like multiplying by process count or gradient accumulation steps, because backpropagation and optimizer steps are turned off.
+
+However, to get a mathematically precise evaluation loss across the entire validation dataset, you must still ensure that:
+
+1. **The loss is calculated as a sum** over valid, non-padded tokens (using `reduction="sum"`).
+2. **Token counts and total losses are gathered across all GPUs** before computing the final average.
+
+---
+
+#### Step-by-step Evaluation Implementation
+
+Here is the clean PyTorch/Accelerate pattern for the evaluation loop:
+
+```python
+import torch
+
+
+@torch.no_grad()
+def evaluate(model, eval_dataloader, accelerator):
+    model.eval()
+
+    # Define loss function with reduction="sum"
+    criterion = torch.nn.CrossEntropyLoss(reduction="sum")
+
+    total_loss = 0.0
+    total_tokens = 0
+
+    for batch in eval_dataloader:
+        inputs = batch["input_ids"]
+        labels = batch["labels"]
+
+        outputs = model(inputs)
+
+        # 1. Compute total loss for non-padded tokens in the local batch (-100 is ignored by default)
+        # Reshape to (N, num_classes) and (N,)
+        loss = criterion(
+            outputs.view(-1, outputs.size(-1)), labels.view(-1)
+        )
+
+        # 2. Count local valid (non-padded) tokens
+        local_valid_tokens = (labels != -100).sum()
+
+        # 3. Gather local loss and token counts across ALL GPUs
+        # accelerator.gather_for_metrics handles gathers and proper slicing if dataloader padded samples
+        losses = accelerator.gather_for_metrics(loss)
+        tokens = accelerator.gather_for_metrics(local_valid_tokens)
+
+        # Accumulate sums
+        total_loss += losses.sum().item()
+        total_tokens += tokens.sum().item()
+
+    # 4. Calculate exact average token loss across the full dataset
+    global_eval_loss = total_loss / total_tokens if total_tokens > 0 else 0.0
+
+    return global_eval_loss
+
+```
+
+---
+
+#### Key Takeaways for Evaluation
+
+* **Use `accelerator.gather_for_metrics`:** Unlike standard `accelerator.gather`, `gather_for_metrics` automatically trims off any extra duplicate samples added by Accelerate's distributed dataloader to make batch sizes even across GPUs.
+* **No `gradient_accumulation_steps` scaling needed:** During evaluation, you process batches as they come without delaying optimizer steps, so you don't scale by accumulation steps or `accelerator.num_processes`.
+* **Per-token Loss vs Per-sequence Loss:** By summing all token losses globally and dividing by `total_tokens`, your evaluation loss stays immune to padding skew and directly reflects the model's true perplexity ($\text{Perplexity} = \exp(\text{eval\_loss})$).
+  
 # Scheduler
 
 A PyTorch learning rate (LR) scheduler adjusts the learning rate dynamically during training to improve model convergence and boost accuracy. Schedulers are managed via the torch.optim.lr_scheduler module and must be executed after the optimizer updates the weights.
