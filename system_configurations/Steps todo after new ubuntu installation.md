@@ -13,6 +13,8 @@
   - [Optional: Install huggingface\_hub](#optional-install-huggingface_hub)
 - [Install Jupyter lab](#install-jupyter-lab)
   - [Connect jupyter lab with specific venv](#connect-jupyter-lab-with-specific-venv)
+  - [Install Ipywidgets](#install-ipywidgets)
+    - [Installing in JupyterLab](#installing-in-jupyterlab)
 - [Install Docker](#install-docker)
 - [Optionals](#optionals)
 
@@ -216,10 +218,42 @@ Run these
 
 ```
 conda install ipykernel
-python -m ipykernel install -user -name=myenv
+python -m ipykernel install --user --name=myenv
 ```
 
 Change myenv with the venv name
+
+## Install Ipywidgets
+
+We can install the current version of `ipywidgets` with pip or conda.
+
+In most cases, installing the Python `ipywidgets` package will also automatically configure Jupyter Notebook and JupyterLab to display `ipywidgets`. With pip, do:
+
+```bash
+pip install ipywidgets
+```
+
+or with conda, do:
+
+```bash
+conda install -c conda-forge ipywidgets
+```
+
+### Installing in JupyterLab
+Most of the time, installing `ipywidgets` automatically configures JupyterLab to use widgets. The `ipywidgets` package does this by depending on the `jupyterlab_widgets` package, which configures JupyterLab to display and use widgets.
+
+If JupyterLab and the IPython kernel are installed in different environments (for example, separate environments are providing different Python kernels), then the installation requires two steps:
+
+1. Install the jupyterlab_widgets package in the environment containing JupyterLab.
+
+2. Install `ipywidgets` in each kernel’s environment that will use `ipywidgets`.
+
+For example, if using conda environments, with JupyterLab installed on the base environment and the kernel installed in an environment called pyenv, the commands are:
+
+```bash
+conda install -n base -c conda-forge jupyterlab_widgets
+conda install -n pyenv -c conda-forge ipywidgets
+```
 
 # Install Docker
 
