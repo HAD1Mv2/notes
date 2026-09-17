@@ -1,3 +1,6 @@
 - python
-- mypy type checker
-- autodicstring by Nils Werner
+- ruff
+- autodocstring by Nils Werner
+- Catppuccinn for VSCode
+- Jupyter
+- Markdown All in One
