@@ -8,6 +8,7 @@
     - [Create new venv](#create-new-venv)
     - [Activate and deactivate new venv](#activate-and-deactivate-new-venv)
     - [View list of active venvs](#view-list-of-active-venvs)
+    - [Clone env (On the same machine)](#clone-env-on-the-same-machine)
 - [Install pytorch](#install-pytorch)
 - [Install transformers](#install-transformers)
   - [Optional: Install huggingface\_hub](#optional-install-huggingface_hub)
@@ -134,7 +135,12 @@ conda env remove --name myenv
 conda info --envs
 ```
 
+### Clone env (On the same machine)
+```
+conda create --name my_new_env --clone my_existing_env
+```
 
+Replace my_new_env with your desired new environment name and my_existing_env with the name of the environment you want to copy.
 
 # Install pytorch
 
@@ -146,6 +152,21 @@ Pip
 pip install torch==2.9.0 torchvision==0.24.0 torchaudio==2.9.0 --index-url https://download.pytorch.org/whl/cu130
 ```
 
+In case you lack `/tmp` space, then create new temporary folder in home and use that folder as tmp substitution when installing.
+
+``` bash
+# 1. Create a new temp folder in your home directory
+mkdir -p ~/new_tmp
+
+# 2. Tell pip to use this folder for cache and builds, then run your install command
+TMPDIR=~/new_tmp PIP_CACHE_DIR=~/new_tmp pip install torch
+```
+
+To use install without cache, run
+
+``` bash
+TMPDIR=~/new_tmp pip install torch --no-cache-dir
+```
 To check whether pytorch using cuda or not, run in python
 
 ``` python
