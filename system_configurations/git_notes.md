@@ -11,6 +11,9 @@
     - [Common Commands](#common-commands)
     - [What if the branch is on a remote repository?](#what-if-the-branch-is-on-a-remote-repository)
     - [Classic Alternative](#classic-alternative)
+  - [Git Basic Workflow](#git-basic-workflow)
+    - [Push change to repo](#push-change-to-repo)
+    - [Create repo locally](#create-repo-locally)
 
 
 ## Add SSH key to github
@@ -132,3 +135,33 @@ If you are working on a very old version of Git (pre-2.23), you will need to use
 
 * Switch branch: `git checkout branch-name`
 * Create and switch: `git checkout -b new-branch-name` [6](https://www.git-tower.com/learn/git/faq/git-checkout-switch-branch) 
+
+## Git Basic Workflow
+
+### Push change to repo
+Assuming you already create and clone repo from github and already create some new files to push to github repo, Then to do this 
+
+1. Stage your files to prepare them for the save:
+    ``` bash
+    git add .
+    ```
+2. Commit your files to create a local save point:
+    ``` bash
+    git commit -m "Initial commit" # or any message regarding change you make
+    ```
+3. Push your code to GitHub:
+    ``` bash
+    git push -u origin main # change main with the branch you want to push to
+    ```
+
+### Create repo locally
+
+- Create new repo in local machine
+  ``` bash
+  # inside your repo folder run
+  git init
+  ```
+- Link your local repository to your remote GitHub repository 
+  ``` bash
+  git remote add origin <PASTE_YOUR_GITHUB_URL_HERE>
+  ```
