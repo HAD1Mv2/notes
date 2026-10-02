@@ -14,6 +14,13 @@
   - [Git Basic Workflow](#git-basic-workflow)
     - [Push change to repo](#push-change-to-repo)
     - [Create repo locally](#create-repo-locally)
+  - [Install Python Package from Github Repo](#install-python-package-from-github-repo)
+    - [Basic Installation](#basic-installation)
+    - [Advanced Installation Options](#advanced-installation-options)
+    - [Private Repositories \& Alternative Protocols](#private-repositories--alternative-protocols)
+      - [1. Using SSH](#1-using-ssh)
+      - [2. Private Repositories (HTTPS + Token)](#2-private-repositories-https--token)
+    - [Adding to requirements.txt](#adding-to-requirementstxt)
 
 
 ## Add SSH key to github
@@ -165,3 +172,51 @@ Assuming you already create and clone repo from github and already create some n
   ``` bash
   git remote add origin <PASTE_YOUR_GITHUB_URL_HERE>
   ```
+
+## Install Python Package from Github Repo
+
+To install a Python package directly from a Git repository, prepend git+ to the repository URL in your pip install command. [1](https://www.youtube.com/watch?v=r-wwMk5faXo&t=2) [2](https://www.youtube.com/watch?v=3weWR1CMgzo&t=16) 
+
+### Basic Installation
+
+To install the latest commit from the default branch (usually main or master): [3](https://fronkan.hashnode.dev/pip-install-a-git-repository) [4](https://www.youtube.com/watch?v=AQrskWh-F5E&t=72) 
+
+``` bash
+pip install git+https://github.com/username/repository.git
+```
+
+------------------------------
+### Advanced Installation Options
+You can target specific versions, branches, or subdirectories by appending parameters to the URL:
+
+| Target Type | Syntax Example |
+|---|---|
+| **Specific Branch** | `pip install git+https://github.com` |
+| **Specific Tag** | `pip install git+https://github.com`|
+| **Specific Commit Hash**| `pip install git+https://github.com` |
+| **Subdirectory** (if `pyproject.toml `or `setup.py` isn't in the root) | `pip install "git+https://github.com"` |
+| **Editable Mode** (for local development) | `pip install -e git+https://github.com` |
+
+------------------------------
+### Private Repositories & Alternative Protocols
+#### 1. Using SSH
+If you have SSH keys set up with your Git provider, use the SSH protocol. Note: Replace the usual colon (:) after the hostname with a forward slash (/): [4](https://www.youtube.com/watch?v=AQrskWh-F5E&t=72) [5](https://www.youtube.com/watch?v=gtyEPynfXY4&t=175) 
+
+``` bash
+pip install git+ssh://git@github.com/username/repository.git
+```
+
+#### 2. Private Repositories (HTTPS + Token)
+For private repositories using HTTPS, you can pass a personal access token or app password: [6](https://docs.readthedocs.com/platform/stable/guides/private-python-packages.html) [7](https://stackabuse.com/bytes/installing-python-packages-from-a-git-repo-with-pip/) 
+
+``` bash
+pip install git+https://github.com
+```
+
+### Adding to requirements.txt
+You can include Git URLs directly in your `requirements.txt` file exactly as they are written above: [5](https://www.youtube.com/watch?v=gtyEPynfXY4&t=175) 
+
+``` text
+requests==2.31.0
+git+https://github.com
+```
